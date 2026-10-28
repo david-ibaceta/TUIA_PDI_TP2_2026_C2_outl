@@ -1,0 +1,15 @@
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Archivos compilados de Python
+__pycache__/
+*.pyc
+
+# Variables de entorno
+.env
+TP1/debug
+TP1/outputs
+
+.DS_Store
