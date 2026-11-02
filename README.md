@@ -1,2 +1,3 @@
-# TUIA_PDI_TP2_2026_C2_outl
-Trabajo práctico N° 2
+UNR | TUIA | PDI
+
+TRABAJO PRÁCTICO N° 2 - Año 2026 - 2° Semestre
