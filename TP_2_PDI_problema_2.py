@@ -1,38 +1,35 @@
 # TP_2_PDI_problema2.py
-
+# Detección de patentes de vehículos mediante procesamiento de imágenes
 # Librerías necesarias 
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-ploteos = False # Variable para controlar muestra de videos intermedios
+ploteos = False # Variable para controlar muestra de ploteos intermedios
 
-# Diccionario de imagenes y umbrales optimos
-# Cada imagen tiene un umbral diferente para binarizar correctamente la patente
-image_thresholds = {"img01.png": 150,
-                    "img02.png": 120,
-                    "img03.png": 110,
-                    "img04.png": 120,
-                    "img05.png": 120,
-                    "img06.png": 110,
-                    "img07.png": 100,
-                    "img08.png": 130,
-                    "img09.png": 115,
-                    "img10.png": 115,
-                    "img11.png": 140,
-                    "img12.png": 100
-}
+# Lista de imagenes
+images = ["img01.png",
+          "img02.png",
+          "img03.png",
+          "img04.png",
+          "img05.png",
+          "img06.png",
+          "img07.png",
+          "img08.png",
+          "img09.png",
+          "img10.png",
+          "img11.png",
+          "img12.png"
+]
 
-# Iteramos sobre cada imagen en el diccionario
-for img, th in image_thresholds.items():
+# Iteramos sobre cada imagen
+for img in images:
     # Cargamos la imagen original
     path_imagen = f'./{img}'
     imagen_orig = cv2.imread(path_imagen)
     
-    # Ajuste umbral para binarizar las imagenes
-    umbral_binario = th
-
+    
     # Redimensionamos a un ancho fijo de 600px para normalizar métricas de área
     valor_w = 650
     h_orig, w_orig = imagen_orig.shape[:2]
@@ -40,15 +37,15 @@ for img, th in image_thresholds.items():
     target_h = int(h_orig * escala)
     imagen = cv2.resize(imagen_orig, (valor_w, target_h))
 
-    if ploteos:
-        plt.figure(figsize=(10, 10))
-        plt.imshow(cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB))
-        plt.title('Imagen Original')
-        #plt.axis('off')
-        plt.draw()
-        plt.waitforbuttonpress()
-        plt.close()
     
+    plt.figure(figsize=(10, 10))
+    plt.imshow(cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB))
+    plt.title(f'Imagen Original {img}')
+    #plt.axis('off')
+    plt.draw()
+    plt.waitforbuttonpress()
+    plt.close()
+
     # Convertimos a escala de grises
     imagen_gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
 
@@ -60,68 +57,72 @@ for img, th in image_thresholds.items():
         plt.draw()
         plt.waitforbuttonpress()
         plt.close()
-        
-
-    # Umbralamos para aislar la patente en negro/blanco
-    _, imagen_binaria = cv2.threshold(imagen_gris, umbral_binario, 255, cv2.THRESH_BINARY)
-
-    if ploteos:
-        plt.figure(figsize=(10, 10))
-        plt.imshow(imagen_binaria, cmap='gray')
-        plt.title('Imagen Binaria')
-        #plt.axis('off')
-        plt.draw()
-        plt.waitforbuttonpress()
-        plt.close()
     
+    # Iteramos sobre un rango de umbrales para buscar el umbral óptimo
+    for th in range(100, 160, 10):
+      # Umbralamos para aislar la patente en negro/blanco
+      _, imagen_binaria = cv2.threshold(imagen_gris, th, 255, cv2.THRESH_BINARY)
 
-    # Aplicamos componentes conectadas
-    # Filtramos las etiquetas por areas para acotar la busqueda
-    # Obtenemos las componentes candidatas caracteres de las placas
-    num_etiquetas, etiquetas, stats, _ = cv2.connectedComponentsWithStats(imagen_binaria, connectivity=8)
+      if ploteos:
+          plt.figure(figsize=(10, 10))
+          plt.imshow(imagen_binaria, cmap='gray')
+          plt.title('Imagen Binaria')
+          #plt.axis('off')
+          plt.draw()
+          plt.waitforbuttonpress()
+          plt.close()
+      
 
-    # Crear una imagen negra en formato RGB (alto, ancho, 3 canales)
-    alto, ancho = etiquetas.shape
-    im_final = np.zeros((alto, ancho, 3), dtype=np.uint8)
+      # Aplicamos componentes conectadas
+      # Filtramos las etiquetas por areas para acotar la busqueda
+      # Obtenemos las componentes candidatas caracteres de las placas
+      num_etiquetas, etiquetas, stats, _ = cv2.connectedComponentsWithStats(imagen_binaria, connectivity=8)
 
-    candidatos = []
+      # Creamos una imagen negra en formato RGB (alto, ancho, 3 canales) para monitoreo
+      alto, ancho = etiquetas.shape
+      im_final = np.zeros((alto, ancho, 3), dtype=np.uint8)
 
-    for i in range(1, num_etiquetas):
-        x, y, w, h, area = stats[i]
-        # Filtramos por área y relación de aspecto de los caracteres
-        if area > 22 and area < 120:
-            if h/w > 1.5 and h/w < 3:
-                candidatos.append((i, x, y, w, h, area))
+      candidatos = []
 
-    # 1. Ordenar candidatos por la coordenada X
-    candidatos_ordenados = sorted(candidatos, key=lambda c: c[1])
+      for i in range(1, num_etiquetas):
+          x, y, w, h, area = stats[i]
+          # Filtramos por área y relación de aspecto de los caracteres
+          if area > 22 and area < 120:
+              if h/w > 1.5 and h/w < 3:
+                  candidatos.append((i, x, y, w, h, area))
 
-    # 2. Agrupación por cercanía usando un umbral de separación ajustable
-    # Definimos el umbral de separación (multiplicador del ancho del caracter para tolerancia)
-    umbral_separacion = 0.5
-    grupos = []
+      # 1. Ordenar candidatos por la coordenada X
+      candidatos_ordenados = sorted(candidatos, key=lambda c: c[1])
 
-    if candidatos_ordenados:
-        grupo_actual = [candidatos_ordenados[0]]
-        for c in candidatos_ordenados[1:]:
-            # C_anterior: (i, x, y, w, h, area)
-            c_ant = grupo_actual[-1]
-            distancia_x = c[1] - (c_ant[1] + c_ant[3]) # Distancia entre el inicio del actual y el final del anterior
+      # 2. Agrupación por cercanía usando un umbral de separación ajustable
+      # Definimos el umbral de separación (multiplicador del ancho del caracter para tolerancia)
+      umbral_separacion = 0.5
+      grupos = []
 
-            # Si la distancia es mayor a 'umbral_separacion * ancho_promedio_caracter', creamos nuevo grupo
-            ancho_referencia = (c[3] + c_ant[3]) / 2
-            if distancia_x > (umbral_separacion * ancho_referencia):
-                grupos.append(grupo_actual)
-                grupo_actual = [c]
-            else:
-                grupo_actual.append(c)
-        grupos.append(grupo_actual)
+      if candidatos_ordenados:
+          grupo_actual = [candidatos_ordenados[0]]
+          for c in candidatos_ordenados[1:]:
+              # C_anterior: (i, x, y, w, h, area)
+              c_ant = grupo_actual[-1]
+              distancia_x = c[1] - (c_ant[1] + c_ant[3]) # Distancia entre el inicio del actual y el final del anterior
 
-    # 3. Filtrar y dibujar grupos que tengan exactamente 3 caracteres
-    caracteres_filtrados = []
-    for g in grupos:
-        if len(g) == 3:
-            caracteres_filtrados.extend(g)
+              # Si la distancia es mayor a 'umbral_separacion * ancho_promedio_caracter', creamos nuevo grupo
+              ancho_referencia = (c[3] + c_ant[3]) / 2
+              if distancia_x > (umbral_separacion * ancho_referencia):
+                  grupos.append(grupo_actual)
+                  grupo_actual = [c]
+              else:
+                  grupo_actual.append(c)
+          grupos.append(grupo_actual)
+
+      # 3. Filtrar y dibujar grupos que tengan exactamente 3 caracteres
+      caracteres_filtrados = []
+      for g in grupos:
+          if len(g) == 3:
+              caracteres_filtrados.extend(g)
+
+      if len(caracteres_filtrados) == 6:  # Si encontramos exactamente 6 caracteres (2 grupos de 3), podemos salir del bucle de umbral
+          break
 
     # Dibujamos solo los caracteres que pasaron el filtro final por grupos
     for i, x, y, w, h, area in caracteres_filtrados:
@@ -132,7 +133,7 @@ for img, th in image_thresholds.items():
         cv2.rectangle(im_final, (x, y), (x + w, y + h), (0, 255, 0), 1)
 
         # Texto/Etiquetas
-        #cv2.putText(im_final, str(i), (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+        cv2.putText(im_final, str(i), (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
         print(f"Etiqueta {i} (Grupo de 3): Área {area} Bbox -> Base: {w} Altura:{h} X:{x}")
 
     # Mostramos únicamente la imagen final con todas las detecciones aplicadas
@@ -193,7 +194,7 @@ for img, th in image_thresholds.items():
         # Mostrar el recorte obtenido
         plt.figure(figsize=(5, 2))
         plt.imshow(cv2.cvtColor(recorte_patente, cv2.COLOR_BGR2RGB))
-        plt.title('Recorte de Patente Guardado')
+        plt.title(f'Recorte de Patente {img} Guardado - Umbral: {th}')
         plt.axis('off')
         plt.draw()
         plt.waitforbuttonpress()
