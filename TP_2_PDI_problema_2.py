@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-ploteos = False # Variable para controlar muestra de ploteos intermedios
+ploteos = True # Variable para controlar muestra de ploteos intermedios
+detectados = 0
 
 # Lista de imagenes
 images = ["img01.png",
@@ -43,33 +44,35 @@ for img in images:
     plt.title(f'Imagen Original {img}')
     #plt.axis('off')
     plt.draw()
-    plt.waitforbuttonpress()
+    plt.waitforbuttonpress(1)
     plt.close()
 
     # Convertimos a escala de grises
     imagen_gris = cv2.cvtColor(imagen, cv2.COLOR_BGR2GRAY)
 
+    """
     if ploteos:
         plt.figure(figsize=(10, 10))
         plt.imshow(imagen_gris, cmap='gray')
         plt.title('Imagen en Escala de Grises')
         plt.axis('off')
         plt.draw()
-        plt.waitforbuttonpress()
+        plt.waitforbuttonpress(2)
         plt.close()
-    
+    """
+
     # Iteramos sobre un rango de umbrales para buscar el umbral óptimo
-    for th in range(100, 160, 10):
+    for th in range(100, 151, 10):
       # Umbralamos para aislar la patente en negro/blanco
       _, imagen_binaria = cv2.threshold(imagen_gris, th, 255, cv2.THRESH_BINARY)
 
       if ploteos:
           plt.figure(figsize=(10, 10))
           plt.imshow(imagen_binaria, cmap='gray')
-          plt.title('Imagen Binaria')
+          plt.title(f'Imagen Binaria - Umbral: {th}')
           #plt.axis('off')
           plt.draw()
-          plt.waitforbuttonpress()
+          plt.waitforbuttonpress(1)
           plt.close()
       
 
@@ -143,7 +146,7 @@ for img in images:
         plt.title('Patente detectada - Filtro por Grupos de 3 Caracteres')
         plt.axis('off')
         plt.draw()
-        plt.waitforbuttonpress()
+        plt.waitforbuttonpress(1)
         plt.close()
 
     # Monitoreo de los candidatos ordenados y sus áreas
@@ -189,6 +192,7 @@ for img in images:
 
         # Guardar la imagen recortada
         cv2.imwrite(ruta_completa_salida, recorte_patente)
+        detectados += 1
         print(f"Recorte de la patente guardado en: {ruta_completa_salida}")
 
         # Mostrar el recorte obtenido
@@ -197,7 +201,12 @@ for img in images:
         plt.title(f'Recorte de Patente {img} Guardado - Umbral: {th}')
         plt.axis('off')
         plt.draw()
-        plt.waitforbuttonpress()
+        plt.waitforbuttonpress(1)
         plt.close()
     else:
         print("No se detectaron caracteres válidos para realizar el recorte.")
+
+print("#" * 90)
+print("Proceso de detección de patentes finalizado")
+print(f"\nTotal de patentes detectadas y recortadas: {detectados} de {len(images)} imagenes procesadas.")
+print("#" * 90)

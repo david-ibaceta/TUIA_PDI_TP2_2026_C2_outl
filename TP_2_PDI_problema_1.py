@@ -18,6 +18,13 @@ escala = valor_w / float(w_orig)
 target_h = int(h_orig * escala)
 img_original = cv2.resize(img_cruda, (valor_w, target_h))
 
+img_rgb = cv2.cvtColor(img_original, cv2.COLOR_BGR2RGB)
+plt.imshow(img_rgb)
+plt.title("Imagen original")
+plt.axis('off')
+plt.pause(3)
+plt.close()
+
 # ---------------------------------------------------------
 # 2. FLUJO DE PROCESAMIENTO MORFOLÓGICO Y FILTRADO
 # ---------------------------------------------------------
@@ -30,29 +37,77 @@ img_blur = cv2.GaussianBlur(img_gris, (7, 7), 0)
 # PASO 3: Detección de bordes finos con Canny
 canny_edges = cv2.Canny(img_blur, threshold1=15, threshold2=125)
 
+plt.imshow(canny_edges, cmap='gray')
+plt.title("Bordes Canny")
+plt.axis('off')
+plt.pause(2)
+plt.close()
+
+
 # PASO 4: Dilatación para cerrar contornos incompletos
 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
 iteraciones = 3
 dilated_edges = cv2.dilate(canny_edges, kernel, iterations=iteraciones)
 
-# PASO 5: Rellenado de huecos (FloodFill)
-h, w = dilated_edges.shape
-floodfilled = dilated_edges.copy()
-mask = np.zeros((h + 2, w + 2), np.uint8) #Tipo de máscara obligatoria de cv2
-# Inunda de blanco (255) desde el (0,0) sin entrar en figuras cerradas
+plt.imshow(dilated_edges, cmap='gray')
+plt.title("Bordes dilatados")
+plt.axis('off')
+plt.pause(2)
+plt.close()
+
+
+# PASO 5: Rellenado de huecos (FloodFill) con marco de seguridad
+# 1. Agregamos un borde negro (value=0) de 1 píxel en los 4 lados para evitar 
+#    que falle cv2.flodfill()
+padded = cv2.copyMakeBorder(dilated_edges, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+
+# 2. Calculamos las nuevas dimensiones (ahora tienen +2 píxeles respecto a la original)
+h, w = padded.shape
+floodfilled = padded.copy()
+# Tipo de máscara obligatoria de cv2 (1 px más que la imagen)
+mask = np.zeros((h + 2, w + 2), np.uint8)
+
+# 3. Inundamos de blanco (255) desde el (0,0) sin entrar en figuras cerradas
 # Conclusión: quedan sólo los agujeros negros internos de cada objeto
 cv2.floodFill(floodfilled, mask, (0, 0), 255)
+
+# 4. Recortamos el marco de 1 píxel para volver al tamaño original
+floodfilled = floodfilled[1:-1, 1:-1]
+
 # Invierte la imagen y nos quedamos sólo con los huecos en blanco
 filled_holes = cv2.bitwise_not(floodfilled)
+
 # Sumamos ambas imagenes y obtenemos nuestros objetos
 filled_objects = cv2.bitwise_or(dilated_edges, filled_holes)
 
+plt.imshow(filled_objects, cmap='gray')
+plt.title("Objetos rellenos")
+plt.axis('off')
+plt.pause(2)
+plt.close()
+
+
 # PASO 6: Erosión para restaurar tamaño original
+# Mismo kernel e iteraciones que el utilizado en dilatación
 eroded = cv2.erode(filled_objects, kernel, iterations=iteraciones)
+
+plt.imshow(eroded, cmap='gray')
+plt.title("Bordes erosionados")
+plt.axis('off')
+plt.pause(2)
+plt.close()
+
 
 # PASO 7: Apertura Morfológica para suavizado y apertura de bordes
 kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
 binary_final = cv2.morphologyEx(eroded, cv2.MORPH_OPEN, kernel_open, iterations=2)
+
+plt.imshow(binary_final, cmap='gray')
+plt.title("Objetos binarios finales")
+plt.axis('off')
+plt.pause(2)
+plt.close()
+
 
 # ---------------------------------------------------------
 # 3. SEGMENTACIÓN Y DISCRIMINACIÓN POR FACTOR DE FORMA
@@ -85,9 +140,11 @@ for cnt in contours:
         # Margen de seguridad del 10% para descartar sombras de bordes
         mx, my = int(bw * 0.10), int(bh * 0.10)
         roi_inner = roi_inv[my:bh-my, mx:bw-mx]
-        
+
+        # Buscamos los puntitos de las caras de los dados
         pip_cnts, _ = cv2.findContours(roi_inner, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+
+        # Contamos la cantidad de puntitos
         valor_dado = 0
         area_dado_inner = (bw - 2*mx) * (bh - 2*my)
         min_p_area = area_dado_inner * 0.015
@@ -96,10 +153,11 @@ for cnt in contours:
         for p_cnt in pip_cnts:
             p_area = cv2.contourArea(p_cnt)
             p_perim = cv2.arcLength(p_cnt, True)
+            # Factor de forma ideal p_circ=1
             p_circ = (4 * np.pi * p_area) / (p_perim ** 2) if p_perim > 0 else 0
             
             # Identificar contornos circulares compatibles con los puntos del dado
-            if min_p_area < p_area < max_p_area and p_circ > 0.55:
+            if min_p_area < p_area < max_p_area and p_circ > 0.8:
                 valor_dado += 1
                 
         dados_cnts.append({
@@ -242,7 +300,7 @@ fig_dados = plt.figure(figsize=(10, 4))
 for idx, (roi_inv, val) in enumerate(rois_dados_inv):
     ax = fig_dados.add_subplot(1, len(rois_dados_inv), idx + 1)
     ax.imshow(roi_inv, cmap='gray')
-    ax.set_title(f"ROI Dado {idx+1} Umbral Inverso (Cara: {val})")
+    ax.set_title(f"ROI Dado {idx+1} Umbral Inverso (Cara superior valor: {val})")
     ax.axis('off')
 
 plt.tight_layout()
